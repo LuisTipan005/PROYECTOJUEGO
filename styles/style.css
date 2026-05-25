@@ -5,8 +5,13 @@ html,body {
   background:#000;
   color:#fff;
 }
+body {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
 #game-container {
-  width:100%;
+  width:100vh;
   height:100vh;
   display:flex;
   align-items:center;

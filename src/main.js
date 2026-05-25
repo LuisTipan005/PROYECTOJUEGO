@@ -7,8 +7,8 @@ import GameOverScene from './scenes/GameOverScene.js';
 const config = {
   type: Phaser.AUTO,
   parent: 'game-container',
-  width: 800,
-  height: 600,
+  width: 768,
+  height: 768,
   backgroundColor: '#000000',
   pixelArt: true,
   antialias: false,
