@@ -8,11 +8,23 @@ export default class GameScene extends Phaser.Scene {
     this.createPlayerAnimations();
 
     this.player = this.physics.add.sprite(400, 300, 'astronaut', 0);
+    this.player.setScale(5);
     this.player.body.setCollideWorldBounds(true);
+    this.player.body.setSize(24, 24, true);
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.playerSpeed = 170;
     this.lastFacing = { anim: 'walk-down', flipX: false };
+
+    this.add.text(12, 12, 'F: pantalla completa', {
+      fontSize: '14px',
+      color: '#ffffff'
+    }).setDepth(1000).setScrollFactor(0);
+
+    this.input.keyboard.on('keydown-F', this.toggleFullscreen, this);
+    this.events.once('shutdown', () => {
+      this.input.keyboard.off('keydown-F', this.toggleFullscreen, this);
+    });
   }
   update() {
     const body = this.player.body;
@@ -93,5 +105,14 @@ export default class GameScene extends Phaser.Scene {
     if (animKey === 'walk-up') return 8;
     if (animKey === 'walk-side') return 4;
     return 0;
+  }
+
+  toggleFullscreen() {
+    if (this.scale.isFullscreen) {
+      this.scale.stopFullscreen();
+      return;
+    }
+
+    this.scale.startFullscreen();
   }
 }
