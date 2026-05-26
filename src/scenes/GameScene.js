@@ -47,17 +47,9 @@ export default class GameScene extends Phaser.Scene {
 
     this.physics.add.collider(this.player, this.wallLayer);
 
-    this.projectiles = this.physics.add.group({
-      classType: Phaser.Physics.Arcade.Image,
-      maxSize: 16,
-      runChildUpdate: false
-    });
     this.slimeGroup = this.physics.add.group();
 
     this.spawnRoomSlimes(room01);
-
-    this.physics.add.collider(this.projectiles, this.wallLayer, this.destroyProjectile, null, this);
-    this.physics.add.overlap(this.projectiles, this.slimeGroup, this.hitSlime, null, this);
 
     this.physics.world.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
     this.cameras.main.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
@@ -68,13 +60,15 @@ export default class GameScene extends Phaser.Scene {
     this.runKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
     this.playerSpeed = 170;
     this.lastFacing = { direction: 'down', flipX: false };
+    this.isPunching = false;
+    this.punchCooldownUntil = 0;
 
     this.hudText = this.add.text(12, 12, '', {
       fontSize: '14px',
       color: '#ffffff'
     }).setDepth(1000).setScrollFactor(0);
 
-    this.instructionText = this.add.text(12, 32, 'F: pantalla completa | G: debug tiles | SPACE: disparar', {
+    this.instructionText = this.add.text(12, 32, 'F: pantalla completa | G: debug tiles | SPACE: golpear', {
       fontSize: '12px',
       color: '#d8f7ff'
     }).setDepth(1000).setScrollFactor(0);
@@ -95,11 +89,11 @@ export default class GameScene extends Phaser.Scene {
 
     this.updateHud();
 
-    this.input.keyboard.on('keydown-SPACE', this.fireProjectile, this);
+    this.input.keyboard.on('keydown-SPACE', this.startPunch, this);
     this.input.keyboard.on('keydown-F', this.toggleFullscreen, this);
     this.input.keyboard.on('keydown-G', this.toggleTileDebugOverlay, this);
     this.events.once('shutdown', () => {
-      this.input.keyboard.off('keydown-SPACE', this.fireProjectile, this);
+      this.input.keyboard.off('keydown-SPACE', this.startPunch, this);
       this.input.keyboard.off('keydown-F', this.toggleFullscreen, this);
       this.input.keyboard.off('keydown-G', this.toggleTileDebugOverlay, this);
     });
@@ -110,34 +104,37 @@ export default class GameScene extends Phaser.Scene {
     }
 
     const body = this.player.body;
-    body.setVelocity(0, 0);
-
-    if (this.cursors.left.isDown) {
-      body.setVelocityX(-this.playerSpeed);
-    } else if (this.cursors.right.isDown) {
-      body.setVelocityX(this.playerSpeed);
-    }
-
-    if (this.cursors.up.isDown) {
-      body.setVelocityY(-this.playerSpeed);
-    } else if (this.cursors.down.isDown) {
-      body.setVelocityY(this.playerSpeed);
-    }
-
-    if (body.velocity.lengthSq() > 0) {
-      body.velocity.normalize().scale(this.playerSpeed);
-      this.playMovementAnimation(body.velocity.x, body.velocity.y);
+    if (this.isPunching) {
+      body.setVelocity(0, 0);
     } else {
-      this.player.anims.stop();
-      this.player.setFlipX(this.lastFacing.flipX);
-      this.player.setTexture(this.getIdleFrameForDirection(this.lastFacing.direction));
+      body.setVelocity(0, 0);
+
+      if (this.cursors.left.isDown) {
+        body.setVelocityX(-this.playerSpeed);
+      } else if (this.cursors.right.isDown) {
+        body.setVelocityX(this.playerSpeed);
+      }
+
+      if (this.cursors.up.isDown) {
+        body.setVelocityY(-this.playerSpeed);
+      } else if (this.cursors.down.isDown) {
+        body.setVelocityY(this.playerSpeed);
+      }
+
+      if (body.velocity.lengthSq() > 0) {
+        body.velocity.normalize().scale(this.playerSpeed);
+        this.playMovementAnimation(body.velocity.x, body.velocity.y);
+      } else {
+        this.player.anims.stop();
+        this.player.setFlipX(this.lastFacing.flipX);
+        this.player.setTexture(this.getIdleFrameForDirection(this.lastFacing.direction));
+      }
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.fireKey)) {
-      this.fireProjectile();
+      this.startPunch();
     }
 
-    this.updateProjectiles(time);
     this.updateSlimes(time);
     this.updateRoomState();
 
@@ -179,14 +176,6 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createGameplayTextures() {
-    if (!this.textures.exists('player-bullet')) {
-      const bulletGraphics = this.add.graphics();
-      bulletGraphics.fillStyle(0xfff176, 1);
-      bulletGraphics.fillCircle(8, 8, 5);
-      bulletGraphics.generateTexture('player-bullet', 16, 16);
-      bulletGraphics.destroy();
-    }
-
     if (!this.textures.exists('room-key')) {
       const keyGraphics = this.add.graphics();
       keyGraphics.fillStyle(0xffd54f, 1);
@@ -270,57 +259,31 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  fireProjectile() {
+  startPunch() {
     if (this.gameOver) {
       return;
     }
 
-    const projectile = this.projectiles.get(this.player.x, this.player.y, 'player-bullet');
-    if (!projectile) {
+    if (this.isPunching || this.time.now < this.punchCooldownUntil) {
       return;
     }
 
-    const direction = this.getFacingDirection();
-    projectile.setActive(true);
-    projectile.setVisible(true);
-    projectile.body.reset(this.player.x, this.player.y);
-    projectile.body.setAllowGravity(false);
-    projectile.body.setSize(8, 8, true);
-    projectile.setDepth(24);
-    projectile.setVelocity(direction.x * 380, direction.y * 380);
-    projectile.damage = 1;
-    projectile.expiresAt = this.time.now + 900;
+    const punchAnimationKey = this.getPunchAnimationKey(this.lastFacing.direction);
+    this.isPunching = true;
+    this.punchCooldownUntil = this.time.now + 260;
+    // durante el golpe hay una ventana corta de invulnerabilidad para que no te dañen al acercarte
+    this.playerInvulnerableUntil = Math.max(this.playerInvulnerableUntil, this.time.now + 180);
+    this.player.anims.play(punchAnimationKey, true);
 
-    this.showMessage('');
-  }
-
-  updateProjectiles(time) {
-    this.projectiles.getChildren().forEach((projectile) => {
-      if (!projectile.active) {
-        return;
-      }
-
-      if (time >= projectile.expiresAt) {
-        projectile.destroy();
-      }
+    this.time.delayedCall(90, () => {
+      this.applyPunchDamage(this.lastFacing.direction);
     });
-  }
 
-  destroyProjectile(projectile) {
-    if (projectile && projectile.active) {
-      projectile.destroy();
-    }
-  }
-
-  hitSlime(projectile, slime) {
-    if (!projectile.active || !slime.active) {
-      return;
-    }
-
-    projectile.destroy();
-    slime.takeDamage(projectile.damage || 1);
-    this.score += 10;
-    this.updateHud();
+    this.player.once('animationcomplete', () => {
+      this.isPunching = false;
+      this.player.setFlipX(this.lastFacing.flipX);
+      this.player.setTexture(this.getIdleFrameForDirection(this.lastFacing.direction));
+    });
   }
 
   damagePlayer(amount = 1) {
@@ -388,6 +351,57 @@ export default class GameScene extends Phaser.Scene {
     return 'michael-run-1';
   }
 
+  getPunchAnimationKey(direction) {
+    if (direction === 'up') {
+      return 'michael-punch-up';
+    }
+
+    if (direction === 'left' || direction === 'right') {
+      return 'michael-punch-side';
+    }
+
+    return 'michael-punch-down';
+  }
+
+  getPunchHitbox(direction) {
+    const bounds = this.player.getBounds();
+
+    if (direction === 'up') {
+      return new Phaser.Geom.Rectangle(bounds.centerX - 16, bounds.top - 24, 32, 24);
+    }
+
+    if (direction === 'left') {
+      return new Phaser.Geom.Rectangle(bounds.left - 24, bounds.top + 14, 24, 24);
+    }
+
+    if (direction === 'right') {
+      return new Phaser.Geom.Rectangle(bounds.right, bounds.top + 14, 24, 24);
+    }
+
+    return new Phaser.Geom.Rectangle(bounds.centerX - 16, bounds.bottom - 4, 32, 24);
+  }
+
+  applyPunchDamage(direction) {
+    const punchHitbox = this.getPunchHitbox(direction);
+    let hitCount = 0;
+
+    this.slimeGroup.getChildren().forEach((slime) => {
+      if (!slime.active) {
+        return;
+      }
+
+      if (Phaser.Geom.Intersects.RectangleToRectangle(punchHitbox, slime.getBounds())) {
+        slime.takeDamage(1);
+        this.score += 10;
+        hitCount += 1;
+      }
+    });
+
+    if (hitCount > 0) {
+      this.updateHud();
+    }
+  }
+
   showMessage(text) {
     if (!this.messageText) {
       return;
@@ -428,6 +442,33 @@ export default class GameScene extends Phaser.Scene {
         frames: [25, 26, 27, 28, 29, 30].map((index) => ({ key: `michael-run-${index}` })),
         frameRate: 10,
         repeat: -1
+      });
+    }
+
+    if (!this.anims.exists('michael-punch-down')) {
+      this.anims.create({
+        key: 'michael-punch-down',
+        frames: [1, 2, 3, 4, 5, 6, 7].map((index) => ({ key: `michael-punch-${index}` })),
+        frameRate: 14,
+        repeat: 0
+      });
+    }
+
+    if (!this.anims.exists('michael-punch-side')) {
+      this.anims.create({
+        key: 'michael-punch-side',
+        frames: [15, 16, 17, 18, 19, 20, 21].map((index) => ({ key: `michael-punch-${index}` })),
+        frameRate: 14,
+        repeat: 0
+      });
+    }
+
+    if (!this.anims.exists('michael-punch-up')) {
+      this.anims.create({
+        key: 'michael-punch-up',
+        frames: [29, 30, 31, 32, 33, 34, 35].map((index) => ({ key: `michael-punch-${index}` })),
+        frameRate: 14,
+        repeat: 0
       });
     }
   }

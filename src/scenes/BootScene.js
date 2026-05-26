@@ -25,6 +25,13 @@ export default class BootScene extends Phaser.Scene {
       }
     });
 
+    for (let index = 1; index <= 35; index += 1) {
+      this.load.image(
+        `michael-punch-${index}`,
+        new URL(`${michaelFolder}/punch/Attack${index}.png`, import.meta.url).href
+      );
+    }
+
     const slimeFolder = '../assets/slime';
     this.load.image('tileset', tilesetPath);
 
@@ -52,6 +59,10 @@ export default class BootScene extends Phaser.Scene {
   create() {
     for (let index = 1; index <= 30; index += 1) {
       this.textures.get(`michael-run-${index}`).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }
+
+    for (let index = 1; index <= 35; index += 1) {
+      this.textures.get(`michael-punch-${index}`).setFilter(Phaser.Textures.FilterMode.NEAREST);
     }
 
     const tilesetTexture = this.textures.get('tileset');
