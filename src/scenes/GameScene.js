@@ -12,9 +12,13 @@ export default class GameScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(room01.spawn.x, room01.spawn.y, 'astronaut', 0);
     this.player.setScale(3);
     this.player.body.setCollideWorldBounds(true);
-    this.player.body.setSize(24, 24, true);
+    // keep the Arcade body aligned with the scaled sprite so world clamping is exact
+    this.player.body.setSize(16, 16);
+    this.player.body.setOffset(0, 0);
 
-    this.physics.add.collider(this.player, this.groundLayer);
+    // removed tile collisions per request; keep world bounds and track valid positions
+    this.player.body.setCollideWorldBounds(true);
+    this.lastValidPos = { x: this.player.x, y: this.player.y };
 
     this.physics.world.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
     this.cameras.main.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
@@ -27,6 +31,13 @@ export default class GameScene extends Phaser.Scene {
     this.add.text(12, 12, 'F: pantalla completa | G: debug tiles', {
       fontSize: '14px',
       color: '#ffffff'
+    }).setDepth(1000).setScrollFactor(0);
+
+    // on-screen collision debug text
+    this.collisionDebugText = this.add.text(12, 32, '', {
+      fontSize: '12px',
+      color: '#ffdddd',
+      backgroundColor: '#00000088'
     }).setDepth(1000).setScrollFactor(0);
 
     this.input.keyboard.on('keydown-F', this.toggleFullscreen, this);
@@ -59,6 +70,37 @@ export default class GameScene extends Phaser.Scene {
       this.player.anims.stop();
       this.player.setFlipX(this.lastFacing.flipX);
       this.player.setFrame(this.getIdleFrame(this.lastFacing.anim));
+    }
+
+    // Keep the player inside the 24x24 room using a simple pixel clamp.
+    if (this.map) {
+      const bodyBB = this.player.body;
+      const halfBodyW = bodyBB.width / 2;
+      const halfBodyH = bodyBB.height / 2;
+      const minCenterX = 0 + halfBodyW;
+      const minCenterY = 0 + halfBodyH;
+      const maxCenterX = this.map.widthInPixels - halfBodyW;
+      const maxCenterY = this.map.heightInPixels - halfBodyH;
+      const clampedX = Phaser.Math.Clamp(this.player.x, minCenterX, maxCenterX);
+      const clampedY = Phaser.Math.Clamp(this.player.y, minCenterY, maxCenterY);
+      if (clampedX !== this.player.x || clampedY !== this.player.y) {
+        this.player.x = clampedX;
+        this.player.y = clampedY;
+        bodyBB.reset(this.player.x, this.player.y);
+      }
+
+      this.lastValidPos.x = this.player.x;
+      this.lastValidPos.y = this.player.y;
+    }
+
+    // live debug: show map size and player's tile coords
+    if (this.collisionDebugText && this.map) {
+      const centerX = this.player.x;
+      const centerY = this.player.y;
+      const tx = this.map.worldToTileX(centerX);
+      const ty = this.map.worldToTileY(centerY);
+      const info = [`map:${this.map.width}x${this.map.height}`, `playerTile:${tx},${ty}`];
+      this.collisionDebugText.setText(info);
     }
   }
 
@@ -135,6 +177,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createSmallMap(room) {
+    // keep current room available for debug overlay
+    this.currentRoom = room;
     if (room.showTilesetReference) {
       this.createTilesetReferenceMap(room);
       return;
@@ -186,7 +230,9 @@ export default class GameScene extends Phaser.Scene {
 
     room.decor.forEach(({ x, y, tile }) => decoLayer.putTileAt(tile, x, y));
 
-    wallLayer.setCollisionByExclusion([-1]);
+    // Only these tile indices should act as blocking collisions
+    const blockingIndices = [0, 1, 2, 10, 12, 20, 21, 22];
+    wallLayer.setCollision(blockingIndices);
 
     floorLayer.setDepth(0);
     wallLayer.setDepth(5);
@@ -274,6 +320,10 @@ export default class GameScene extends Phaser.Scene {
   createTileDebugOverlay() {
     this.tileDebugContainer = this.add.container(0, 0).setDepth(900).setVisible(false);
 
+    const room = this.currentRoom || {};
+    const walkable = new Set(room.walkableTiles || []);
+    const blockingLogical = new Set([0, 1, 2, 10, 12, 20, 21, 22]);
+
     for (let y = 0; y < this.map.height; y += 1) {
       for (let x = 0; x < this.map.width; x += 1) {
         const decoTile = this.decoLayer.getTileAt(x, y);
@@ -281,19 +331,39 @@ export default class GameScene extends Phaser.Scene {
         const floorTile = this.floorLayer.getTileAt(x, y);
 
         const topTile = decoTile || wallTile || floorTile;
-        const tileIndex = topTile && topTile.index !== -1 ? topTile.index : -1;
+        const logicalIndex = topTile && topTile.index !== -1 ? topTile.index : -1;
+
+        // background rectangle to show blocking (red) / walkable (green) / empty (transparent)
+        const gfx = this.add.rectangle(
+          x * this.map.tileWidth + this.map.tileWidth / 2,
+          y * this.map.tileHeight + this.map.tileHeight / 2,
+          this.map.tileWidth,
+          this.map.tileHeight,
+          0x000000,
+          0
+        );
+
+        if (logicalIndex !== -1) {
+          if (walkable.has(logicalIndex)) {
+            gfx.setFillStyle(0x00ff00, 0.15);
+          } else if (blockingLogical.has(logicalIndex)) {
+            gfx.setFillStyle(0xff0000, 0.2);
+          } else {
+            gfx.setFillStyle(0xffff00, 0.08);
+          }
+        }
 
         const label = this.add.text(
           x * this.map.tileWidth + 2,
           y * this.map.tileHeight + 2,
-          `${tileIndex}`,
+          `${logicalIndex}`,
           {
-            fontSize: '8px',
-            color: '#00ff8a',
-            backgroundColor: '#000000aa'
+            fontSize: '10px',
+            color: '#00ff8a'
           }
         );
 
+        this.tileDebugContainer.add(gfx);
         this.tileDebugContainer.add(label);
       }
     }
@@ -316,6 +386,40 @@ export default class GameScene extends Phaser.Scene {
       const tx = horizontal ? x + i : x;
       const ty = horizontal ? y : y + i;
       layer.removeTileAt(tx, ty);
+    }
+  }
+
+  onPlayerTileCollision(player, tile) {
+    try {
+      // tile may be a Tile object when colliding with a TilemapLayer
+      const idx = tile && tile.index !== undefined ? tile.index : -1;
+      const tx = tile && tile.x !== undefined ? tile.x : null;
+      const ty = tile && tile.y !== undefined ? tile.y : null;
+      // get what each layer has at that coord
+      const floorT = tx !== null ? this.floorLayer.getTileAt(tx, ty) : null;
+      const wallT = tx !== null ? this.wallLayer.getTileAt(tx, ty) : null;
+      const decoT = tx !== null ? this.decoLayer.getTileAt(tx, ty) : null;
+
+      console.log('--- Player collision debug ---');
+      console.log('collided tile.index:', idx, 'tile coords:', tx, ty);
+      console.log('floorLayer tile.index:', floorT && floorT.index, 'wallLayer tile.index:', wallT && wallT.index, 'decoLayer tile.index:', decoT && decoT.index);
+      console.log('room.walkableTiles:', this.currentRoom && this.currentRoom.walkableTiles);
+
+      // highlight the tile briefly
+      const worldX = tile.pixelX + this.map.tileWidth / 2;
+      const worldY = tile.pixelY + this.map.tileHeight / 2;
+      const rect = this.add.rectangle(worldX, worldY, this.map.tileWidth, this.map.tileHeight, 0xff0000, 0.4).setDepth(2000);
+      this.time.delayedCall(200, () => rect.destroy());
+      if (this.collisionDebugText) {
+        this.collisionDebugText.setText([
+          `collided: idx=${idx} @(${tx},${ty})`,
+          `floor=${floorT && floorT.index} wall=${wallT && wallT.index} deco=${decoT && decoT.index}`,
+          `walkable=${JSON.stringify(this.currentRoom && this.currentRoom.walkableTiles)}`
+        ]);
+      }
+    } catch (e) {
+      // ignore if tile is undefined
+      // console.error(e);
     }
   }
 }
