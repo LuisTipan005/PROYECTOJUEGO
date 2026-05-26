@@ -17,16 +17,31 @@ export default class GameScene extends Phaser.Scene {
     this.createGameplayTextures();
     this.createSlimeAnimations();
     this.createSmallMap(room01);
+    // crear animaciones del jugador usando los PNG individuales del run
+    // grupos: 1-6 abajo, 13-18 lateral, 25-30 arriba
     this.createPlayerAnimations();
 
-    this.player = this.physics.add.sprite(room01.spawn.x, room01.spawn.y, 'astronaut', 0);
-    this.player.setScale(3);
+    this.player = this.physics.add.sprite(room01.spawn.x, room01.spawn.y, 'michael-run-1');
+    // anclar en la parte inferior-centro para evitar que el sprite aparezca cortado
+    this.player.setOrigin(0.5, 1);
+    // escalar por un entero respecto a los cuadros 16x32 para evitar recortes por sub-píxeles
+    this.player.setScale(2);
     this.player.body.setCollideWorldBounds(true);
-    // keep the Arcade body aligned with the scaled sprite so world clamping is exact
-    this.player.body.setSize(16, 16);
-    this.player.body.setOffset(0, 0);
+    // calcular la hitbox en base al tamaño visible del sprite (16x32 * escala 2 = 32x64)
+    // la hitbox cubre sobre todo el cuerpo y deja fuera un poco de cabeza para caminar mejor
+    const playerFrameWidth = 16;
+    const playerFrameHeight = 32;
+    const playerScale = 2;
+    const playerDisplayWidth = playerFrameWidth * playerScale;
+    const playerDisplayHeight = playerFrameHeight * playerScale;
+    const playerHitboxWidth = Math.round(playerDisplayWidth * 0.5);
+    const playerHitboxHeight = Math.round(playerDisplayHeight * 0.32);
+    const playerHitboxOffsetX = Math.round((playerDisplayWidth - playerHitboxWidth) / 2);
+    const playerHitboxOffsetY = Math.round(playerDisplayHeight - playerHitboxHeight - 2);
+    this.player.body.setSize(playerHitboxWidth, playerHitboxHeight);
+    this.player.body.setOffset(playerHitboxOffsetX, playerHitboxOffsetY);
 
-    // removed tile collisions per request; keep world bounds and track valid positions
+    // colisiones con tiles eliminadas por solicitud; mantener límites del mundo y registrar posiciones válidas
     this.player.body.setCollideWorldBounds(true);
     this.lastValidPos = { x: this.player.x, y: this.player.y };
 
@@ -50,8 +65,9 @@ export default class GameScene extends Phaser.Scene {
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.fireKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.runKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
     this.playerSpeed = 170;
-    this.lastFacing = { anim: 'walk-down', flipX: false };
+    this.lastFacing = { direction: 'down', flipX: false };
 
     this.hudText = this.add.text(12, 12, '', {
       fontSize: '14px',
@@ -70,7 +86,7 @@ export default class GameScene extends Phaser.Scene {
       padding: { x: 10, y: 4 }
     }).setOrigin(0.5).setDepth(1000).setScrollFactor(0);
 
-    // on-screen collision debug text
+    // texto de depuración de colisiones en pantalla
     this.collisionDebugText = this.add.text(12, 52, '', {
       fontSize: '12px',
       color: '#ffdddd',
@@ -114,7 +130,7 @@ export default class GameScene extends Phaser.Scene {
     } else {
       this.player.anims.stop();
       this.player.setFlipX(this.lastFacing.flipX);
-      this.player.setFrame(this.getIdleFrame(this.lastFacing.anim));
+      this.player.setTexture(this.getIdleFrameForDirection(this.lastFacing.direction));
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.fireKey)) {
@@ -345,15 +361,31 @@ export default class GameScene extends Phaser.Scene {
   }
 
   getFacingDirection() {
-    if (this.lastFacing.anim === 'walk-side') {
-      return new Phaser.Math.Vector2(this.lastFacing.flipX ? -1 : 1, 0);
+    if (this.lastFacing.direction === 'left') {
+      return new Phaser.Math.Vector2(-1, 0);
     }
 
-    if (this.lastFacing.anim === 'walk-up') {
+    if (this.lastFacing.direction === 'right') {
+      return new Phaser.Math.Vector2(1, 0);
+    }
+
+    if (this.lastFacing.direction === 'up') {
       return new Phaser.Math.Vector2(0, -1);
     }
 
     return new Phaser.Math.Vector2(0, 1);
+  }
+
+  getIdleFrameForDirection(direction) {
+    if (direction === 'up') {
+      return 'michael-run-25';
+    }
+
+    if (direction === 'left' || direction === 'right') {
+      return 'michael-run-13';
+    }
+
+    return 'michael-run-1';
   }
 
   showMessage(text) {
@@ -372,29 +404,29 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createPlayerAnimations() {
-    if (!this.anims.exists('walk-down')) {
+    if (!this.anims.exists('michael-down')) {
       this.anims.create({
-        key: 'walk-down',
-        frames: this.anims.generateFrameNumbers('astronaut', { start: 0, end: 3 }),
-        frameRate: 8,
+        key: 'michael-down',
+        frames: [1, 2, 3, 4, 5, 6].map((index) => ({ key: `michael-run-${index}` })),
+        frameRate: 10,
         repeat: -1
       });
     }
 
-    if (!this.anims.exists('walk-side')) {
+    if (!this.anims.exists('michael-side')) {
       this.anims.create({
-        key: 'walk-side',
-        frames: this.anims.generateFrameNumbers('astronaut', { start: 4, end: 7 }),
-        frameRate: 8,
+        key: 'michael-side',
+        frames: [13, 14, 15, 16, 17, 18].map((index) => ({ key: `michael-run-${index}` })),
+        frameRate: 10,
         repeat: -1
       });
     }
 
-    if (!this.anims.exists('walk-up')) {
+    if (!this.anims.exists('michael-up')) {
       this.anims.create({
-        key: 'walk-up',
-        frames: this.anims.generateFrameNumbers('astronaut', { start: 8, end: 11 }),
-        frameRate: 8,
+        key: 'michael-up',
+        frames: [25, 26, 27, 28, 29, 30].map((index) => ({ key: `michael-run-${index}` })),
+        frameRate: 10,
         repeat: -1
       });
     }
@@ -403,27 +435,22 @@ export default class GameScene extends Phaser.Scene {
   playMovementAnimation(vx, vy) {
     if (Math.abs(vx) >= Math.abs(vy)) {
       const flipX = vx < 0;
+      const direction = flipX ? 'left' : 'right';
       this.player.setFlipX(flipX);
-      this.player.anims.play('walk-side', true);
-      this.lastFacing = { anim: 'walk-side', flipX };
+      this.player.anims.play('michael-side', true);
+      this.lastFacing = { direction, flipX };
       return;
     }
 
     if (vy < 0) {
       this.player.setFlipX(false);
-      this.player.anims.play('walk-up', true);
-      this.lastFacing = { anim: 'walk-up', flipX: false };
+      this.player.anims.play('michael-up', true);
+      this.lastFacing = { direction: 'up', flipX: false };
     } else {
       this.player.setFlipX(false);
-      this.player.anims.play('walk-down', true);
-      this.lastFacing = { anim: 'walk-down', flipX: false };
+      this.player.anims.play('michael-down', true);
+      this.lastFacing = { direction: 'down', flipX: false };
     }
-  }
-
-  getIdleFrame(animKey) {
-    if (animKey === 'walk-up') return 8;
-    if (animKey === 'walk-side') return 4;
-    return 0;
   }
 
   toggleFullscreen() {

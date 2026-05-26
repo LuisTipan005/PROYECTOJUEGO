@@ -5,14 +5,27 @@ export default class BootScene extends Phaser.Scene {
     super({ key: 'BootScene' });
   }
   preload() {
-    const walkSpritePath = new URL('../assets/walk.png', import.meta.url).href;
     const tilesetPath = new URL('../assets/TileSet v1.0.png', import.meta.url).href;
-    const slimeFolder = '../assets/slime';
 
-    this.load.spritesheet('astronaut', walkSpritePath, {
-      frameWidth: 32,
-      frameHeight: 32
+    const michaelFolder = '../assets/Michael';
+    const michaelRunGroups = [
+      { prefix: 'michael-run-down', start: 1, end: 6 },
+      { prefix: 'michael-run-down-side', start: 7, end: 12 },
+      { prefix: 'michael-run-side', start: 13, end: 18 },
+      { prefix: 'michael-run-up-side', start: 19, end: 24 },
+      { prefix: 'michael-run-up', start: 25, end: 30 }
+    ];
+
+    michaelRunGroups.forEach(({ prefix, start, end }) => {
+      for (let index = start; index <= end; index += 1) {
+        this.load.image(
+          `michael-run-${index}`,
+          new URL(`${michaelFolder}/run/16x32 Run${index}.png`, import.meta.url).href
+        );
+      }
     });
+
+    const slimeFolder = '../assets/slime';
     this.load.image('tileset', tilesetPath);
 
     this.load.spritesheet('slime-idle', new URL(`${slimeFolder}/Slime1_Idle_full.png`, import.meta.url).href, {
@@ -37,8 +50,9 @@ export default class BootScene extends Phaser.Scene {
     });
   }
   create() {
-    const astronautTexture = this.textures.get('astronaut');
-    astronautTexture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    for (let index = 1; index <= 30; index += 1) {
+      this.textures.get(`michael-run-${index}`).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }
 
     const tilesetTexture = this.textures.get('tileset');
     tilesetTexture.setFilter(Phaser.Textures.FilterMode.NEAREST);
