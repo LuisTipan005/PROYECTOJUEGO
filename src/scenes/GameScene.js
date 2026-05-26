@@ -1,11 +1,21 @@
 import Phaser from 'phaser';
 import room01 from '../maps/room01.js';
+import Slime from '../objects/Slime.js';
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
     super({ key: 'GameScene' });
   }
-  create() {
+  create(data = {}) {
+    this.roomIndex = data.roomIndex ?? 1;
+    this.score = data.score ?? 0;
+    this.playerHealth = 3;
+    this.playerInvulnerableUntil = 0;
+    this.gameOver = false;
+    this.roomKey = null;
+
+    this.createGameplayTextures();
+    this.createSlimeAnimations();
     this.createSmallMap(room01);
     this.createPlayerAnimations();
 
@@ -20,34 +30,69 @@ export default class GameScene extends Phaser.Scene {
     this.player.body.setCollideWorldBounds(true);
     this.lastValidPos = { x: this.player.x, y: this.player.y };
 
+    this.physics.add.collider(this.player, this.wallLayer);
+
+    this.projectiles = this.physics.add.group({
+      classType: Phaser.Physics.Arcade.Image,
+      maxSize: 16,
+      runChildUpdate: false
+    });
+    this.slimeGroup = this.physics.add.group();
+
+    this.spawnRoomSlimes(room01);
+
+    this.physics.add.collider(this.projectiles, this.wallLayer, this.destroyProjectile, null, this);
+    this.physics.add.overlap(this.projectiles, this.slimeGroup, this.hitSlime, null, this);
+
     this.physics.world.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
     this.cameras.main.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
 
     this.cursors = this.input.keyboard.createCursorKeys();
+    this.fireKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.playerSpeed = 170;
     this.lastFacing = { anim: 'walk-down', flipX: false };
 
-    this.add.text(12, 12, 'F: pantalla completa | G: debug tiles', {
+    this.hudText = this.add.text(12, 12, '', {
       fontSize: '14px',
       color: '#ffffff'
     }).setDepth(1000).setScrollFactor(0);
 
+    this.instructionText = this.add.text(12, 32, 'F: pantalla completa | G: debug tiles | SPACE: disparar', {
+      fontSize: '12px',
+      color: '#d8f7ff'
+    }).setDepth(1000).setScrollFactor(0);
+
+    this.messageText = this.add.text(this.scale.width / 2, 64, '', {
+      fontSize: '18px',
+      color: '#ffff88',
+      backgroundColor: '#00000088',
+      padding: { x: 10, y: 4 }
+    }).setOrigin(0.5).setDepth(1000).setScrollFactor(0);
+
     // on-screen collision debug text
-    this.collisionDebugText = this.add.text(12, 32, '', {
+    this.collisionDebugText = this.add.text(12, 52, '', {
       fontSize: '12px',
       color: '#ffdddd',
       backgroundColor: '#00000088'
     }).setDepth(1000).setScrollFactor(0);
 
+    this.updateHud();
+
+    this.input.keyboard.on('keydown-SPACE', this.fireProjectile, this);
     this.input.keyboard.on('keydown-F', this.toggleFullscreen, this);
     this.input.keyboard.on('keydown-G', this.toggleTileDebugOverlay, this);
     this.events.once('shutdown', () => {
+      this.input.keyboard.off('keydown-SPACE', this.fireProjectile, this);
       this.input.keyboard.off('keydown-F', this.toggleFullscreen, this);
       this.input.keyboard.off('keydown-G', this.toggleTileDebugOverlay, this);
     });
   }
-  update() {
+  update(time) {
+    if (this.gameOver) {
+      return;
+    }
+
     const body = this.player.body;
     body.setVelocity(0, 0);
 
@@ -71,6 +116,14 @@ export default class GameScene extends Phaser.Scene {
       this.player.setFlipX(this.lastFacing.flipX);
       this.player.setFrame(this.getIdleFrame(this.lastFacing.anim));
     }
+
+    if (Phaser.Input.Keyboard.JustDown(this.fireKey)) {
+      this.fireProjectile();
+    }
+
+    this.updateProjectiles(time);
+    this.updateSlimes(time);
+    this.updateRoomState();
 
     // Keep the player inside the 24x24 room using a simple pixel clamp.
     if (this.map) {
@@ -99,8 +152,222 @@ export default class GameScene extends Phaser.Scene {
       const centerY = this.player.y;
       const tx = this.map.worldToTileX(centerX);
       const ty = this.map.worldToTileY(centerY);
-      const info = [`map:${this.map.width}x${this.map.height}`, `playerTile:${tx},${ty}`];
+      const info = [
+        `map:${this.map.width}x${this.map.height}`,
+        `playerTile:${tx},${ty}`,
+        `slimes:${this.slimeGroup.countActive(true)}`,
+        `key:${this.roomKey ? 'yes' : 'no'}`
+      ];
       this.collisionDebugText.setText(info);
+    }
+  }
+
+  createGameplayTextures() {
+    if (!this.textures.exists('player-bullet')) {
+      const bulletGraphics = this.add.graphics();
+      bulletGraphics.fillStyle(0xfff176, 1);
+      bulletGraphics.fillCircle(8, 8, 5);
+      bulletGraphics.generateTexture('player-bullet', 16, 16);
+      bulletGraphics.destroy();
+    }
+
+    if (!this.textures.exists('room-key')) {
+      const keyGraphics = this.add.graphics();
+      keyGraphics.fillStyle(0xffd54f, 1);
+      keyGraphics.fillRect(2, 7, 12, 4);
+      keyGraphics.fillRect(10, 5, 4, 8);
+      keyGraphics.fillCircle(4, 9, 2);
+      keyGraphics.generateTexture('room-key', 16, 16);
+      keyGraphics.destroy();
+    }
+  }
+
+  createSlimeAnimations() {
+    Slime.ensureAnimations(this);
+  }
+
+  spawnRoomSlimes(room) {
+    const spawnPoints = [
+      { x: room.spawn.x - 180, y: room.spawn.y - 120 },
+      { x: room.spawn.x + 180, y: room.spawn.y - 120 },
+      { x: room.spawn.x, y: room.spawn.y + 160 }
+    ];
+
+    spawnPoints.forEach(({ x, y }) => {
+      const slime = new Slime(this, x, y, {
+        health: 3,
+        speed: 70,
+        detectionRange: 240,
+        attackRange: 42
+      });
+
+      this.slimeGroup.add(slime);
+      this.physics.add.collider(slime, this.wallLayer);
+      this.physics.add.collider(slime, this.player);
+    });
+  }
+
+  updateSlimes(time) {
+    this.slimeGroup.getChildren().forEach((slime) => {
+      if (slime.active) {
+        slime.update(time, this.player);
+      }
+    });
+  }
+
+  updateRoomState() {
+    if (this.roomKey || this.slimeGroup.countActive(true) > 0) {
+      this.updateHud();
+      return;
+    }
+
+    this.spawnRoomKey();
+    this.showMessage('Todos los slimes fueron derrotados. Toma la llave.');
+    this.updateHud();
+  }
+
+  spawnRoomKey() {
+    if (this.roomKey) {
+      return;
+    }
+
+    this.roomKey = this.physics.add.image(this.map.widthInPixels / 2, this.map.heightInPixels / 2, 'room-key');
+    this.roomKey.setImmovable(true);
+    this.roomKey.body.setAllowGravity(false);
+    this.roomKey.setDepth(22);
+    this.physics.add.overlap(this.player, this.roomKey, this.collectRoomKey, null, this);
+  }
+
+  collectRoomKey() {
+    if (!this.roomKey || this.gameOver) {
+      return;
+    }
+
+    this.roomKey.destroy();
+    this.roomKey = null;
+    this.score += 100;
+    this.updateHud();
+    this.showMessage('Room completado');
+
+    this.time.delayedCall(500, () => {
+      this.scene.restart({ roomIndex: this.roomIndex + 1, score: this.score });
+    });
+  }
+
+  fireProjectile() {
+    if (this.gameOver) {
+      return;
+    }
+
+    const projectile = this.projectiles.get(this.player.x, this.player.y, 'player-bullet');
+    if (!projectile) {
+      return;
+    }
+
+    const direction = this.getFacingDirection();
+    projectile.setActive(true);
+    projectile.setVisible(true);
+    projectile.body.reset(this.player.x, this.player.y);
+    projectile.body.setAllowGravity(false);
+    projectile.body.setSize(8, 8, true);
+    projectile.setDepth(24);
+    projectile.setVelocity(direction.x * 380, direction.y * 380);
+    projectile.damage = 1;
+    projectile.expiresAt = this.time.now + 900;
+
+    this.showMessage('');
+  }
+
+  updateProjectiles(time) {
+    this.projectiles.getChildren().forEach((projectile) => {
+      if (!projectile.active) {
+        return;
+      }
+
+      if (time >= projectile.expiresAt) {
+        projectile.destroy();
+      }
+    });
+  }
+
+  destroyProjectile(projectile) {
+    if (projectile && projectile.active) {
+      projectile.destroy();
+    }
+  }
+
+  hitSlime(projectile, slime) {
+    if (!projectile.active || !slime.active) {
+      return;
+    }
+
+    projectile.destroy();
+    slime.takeDamage(projectile.damage || 1);
+    this.score += 10;
+    this.updateHud();
+  }
+
+  damagePlayer(amount = 1) {
+    if (this.gameOver) {
+      return;
+    }
+
+    if (this.time.now < this.playerInvulnerableUntil) {
+      return;
+    }
+
+    this.playerHealth -= amount;
+    this.playerInvulnerableUntil = this.time.now + 700;
+    this.player.setTint(0xff6666);
+    this.time.delayedCall(120, () => {
+      if (this.player && this.player.active) {
+        this.player.clearTint();
+      }
+    });
+
+    this.updateHud();
+
+    if (this.playerHealth <= 0) {
+      this.gameOver = true;
+      this.scene.start('GameOverScene', { score: this.score });
+    }
+  }
+
+  updateHud() {
+    if (!this.hudText) {
+      return;
+    }
+
+    const aliveSlimes = this.slimeGroup ? this.slimeGroup.countActive(true) : 0;
+    this.hudText.setText(
+      `Nivel: ${this.roomIndex} | Vida: ${Math.max(this.playerHealth, 0)} | Slimes: ${aliveSlimes} | Puntos: ${this.score}`
+    );
+  }
+
+  getFacingDirection() {
+    if (this.lastFacing.anim === 'walk-side') {
+      return new Phaser.Math.Vector2(this.lastFacing.flipX ? -1 : 1, 0);
+    }
+
+    if (this.lastFacing.anim === 'walk-up') {
+      return new Phaser.Math.Vector2(0, -1);
+    }
+
+    return new Phaser.Math.Vector2(0, 1);
+  }
+
+  showMessage(text) {
+    if (!this.messageText) {
+      return;
+    }
+
+    this.messageText.setText(text);
+    if (text) {
+      this.time.delayedCall(1200, () => {
+        if (this.messageText) {
+          this.messageText.setText('');
+        }
+      });
     }
   }
 

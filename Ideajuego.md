@@ -1,1 +1,24 @@
-🛰️ Documento de Concepto Definitivo: Sector de CuarentenaMecánica Central del Juego (Loop Principal)El astronauta se mueve en una perspectiva Top-Down (vista aérea). La estación espacial está compuesta por una cuadrícula interconectada de habitaciones cerradas (por ejemplo, un mapa de $3 \times 3$). Al entrar a una habitación, las puertas se sellan automáticamente. El jugador debe eliminar a todos los monstruos de la sala para que las puertas se abran y pueda continuar explorando.  Objetivo de Victoria y DerrotaCondición de Victoria: Encontrar y recolectar los 4 núcleos de datos esparcidos en habitaciones aleatorias del mapa, y luego entrar a la habitación central para destruir al Monstruo Alfa (Jefe Final).  Condición de Derrota: Si la barra de vida o el escudo del astronauta llega a cero por el ataque de los monstruos, la pantalla se oscurece y muestra el Game Over junto con el High Score guardado.  👾 Elenco de Enemigos (Fáciles de programar)Para cumplir con el requisito de "enemigos o retos" de la rúbrica utilizando Arcade Physics, manejaremos dos tipos de inteligencia artificial básica:  Parásito Corredor (Cuerpo a cuerpo): Su lógica de JavaScript en el game loop consiste únicamente en buscar la posición $(x, y)$ del jugador y moverse en línea recta hacia él a velocidad alta (velocityFromRotation o moveToObject). Hace daño por contacto directo (colisión).  Mutante Centinela (Distancia): Se mueve lentamente por la habitación de forma aleatoria, pero tiene un temporizador interno (Phaser.Time.TimerEvent) que cada 2 o 3 segundos crea un proyectil simple (una bala enemiga) con dirección fija hacia la posición actual del astronauta.⚡ Sistema de Mejoras (Power-Ups de Combate)En lugar de complicarte con inventarios o llaves de colores, las mejoras modifican directamente las propiedades físicas del jugador al pasar sobre ellas:  Cápsula de Plasma (Disparo más potente): Aumenta el daño de tus balas o cambia tu patrón de disparo simple a un disparo doble en paralelo.Célula de Escudo (Mejor Escudo): Añade una barra azul sobre la barra de vida del HUD. El escudo absorbe el 100% del daño de los primeros impactos y se regenera lentamente si pasas 5 segundos sin recibir daño.  💡 Tips para empezar a tirar código ya mismo:Para el cambio de habitaciones, puedes hacer que cuando el jugador toque un borde de la pantalla (onWorldBounds), la escena actual simplemente limpie los enemigos viejos, mueva al jugador al extremo opuesto de la pantalla y spawnee la nueva tanda de monstruos correspondientes a esa coordenada de la estación.Usa sprites planos o círculos de Kenney.nl para los coleccionables de los núcleos y las mejoras, así no pierdes tiempo alineando animaciones de frame
+🛰️ Documento de Concepto Definitivo: Cuartos y Llaves
+
+Mecánica Central del Juego (Loop Principal)
+El juego será un top-down sencillo basado en cuartos. Cada cuadro o room funciona como un nivel independiente. En cada nivel aparecen varios enemigos slimes y el objetivo es derrotarlos a todos para que aparezca una llave. Cuando el jugador recoge la llave, puede abrir la puerta del cuarto y pasar al siguiente room.
+
+Estructura del Progreso
+Room 1 será el primer nivel del juego. Al completarlo, el jugador avanza al siguiente cuarto, donde la misma lógica se repite con otra distribución de enemigos. La idea es mantener el avance por niveles cortos, claros y rápidos de jugar.
+
+Objetivo de Victoria y Derrota
+Condición de Victoria: completar todos los rooms definidos.
+Condición de Derrota: si la vida del jugador llega a cero, aparece Game Over y se puede reiniciar la partida.
+
+👾 Enemigos
+El enemigo principal será el slime, usando los diferentes PNG que ya tienen para mostrar sus acciones o estados. La idea es usar variantes visuales del slime para diferenciar movimiento, ataque o daño sin complicar la programación.
+
+⚡ Reglas del Nivel
+1. El jugador entra al room.
+2. Aparecen los slimes del nivel.
+3. El jugador elimina a todos los enemigos.
+4. Se genera una llave.
+5. El jugador recoge la llave y pasa al siguiente room.
+
+💡 Recomendación técnica
+Cada room puede manejarse como un mapa independiente, reutilizando la misma estructura base. Eso permite hacer más niveles sin cambiar la lógica principal, solo ajustando enemigos, posición de la llave y decoración.

@@ -4,7 +4,7 @@ Aplicaciones Web
 Proyecto Final de Primer Bimestre
 Desarrollo de Videojuegos con Phaser.js
 
-Tema: Crear un videojuego original con Phaser.js, inspirado en los ejercicios y conceptos desarrollados durante el curso.
+Tema: Videojuego top-down por rooms, donde cada cuarto es un nivel y el jugador debe derrotar a todos los slimes para conseguir una llave y avanzar al siguiente room.
 
 Asignatura	Aplicaciones Web
 Nivel	Proyecto final de primer bimestre
@@ -12,7 +12,7 @@ Tecnología central	Phaser.js + JavaScript
 Autor	Jaime Sayago-Heredia
 1. Tema del Proyecto
 Desarrollar un videojuego original utilizando Phaser.js y tecnologías web modernas, inspirado en los ejercicios y conceptos revisados durante el curso.
-El proyecto deberá implementar mecánicas completas de juego, arquitectura modular, física, manejo de estados y una experiencia de usuario profesional.
+El proyecto implementará un sistema simple de niveles por habitaciones, combate contra enemigos, desbloqueo de puertas mediante llaves y progresión por rooms.
 2. Objetivos del Proyecto
 El estudiante deberá demostrar competencias en:
 •	Desarrollo de videojuegos 2D utilizando Phaser.js.
