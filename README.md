@@ -2,7 +2,7 @@
 
 Este repositorio es un scaffold inicial para el proyecto de videojuego con Phaser.js basado en los documentos de la materia.
 
-- Contenido de diseño y requisitos: [`descripcion.md`](descripcion.md), [`Ideajuego.md`](Ideajuego.md)
+- Contenido de diseño y requisitos: [`descripcion.md`](descripcion.md)
 
 Cómo ejecutar (recomendado con Node.js instalado):
 
