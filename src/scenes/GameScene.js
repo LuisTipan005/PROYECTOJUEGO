@@ -200,7 +200,7 @@ export default class GameScene extends Phaser.Scene {
 
     spawnPoints.forEach(({ x, y }) => {
       const slime = new Slime(this, x, y, {
-        health: 3,
+        health: 2,
         speed: 70,
         detectionRange: 240,
         attackRange: 42

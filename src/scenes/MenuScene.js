@@ -6,8 +6,8 @@ export default class MenuScene extends Phaser.Scene {
   }
   create() {
     const { width, height } = this.scale;
-    this.add.text(width / 2, height / 2 - 20, 'Presiona ENTER para jugar', { fontSize: '24px' }).setOrigin(0.5);
-    this.add.text(width / 2, height / 2 + 20, 'Presiona F para pantalla completa', { fontSize: '16px' }).setOrigin(0.5);
+    this.portada = this.add.image(0, 0, 'portada').setOrigin(0, 0);
+    this.portada.setDisplaySize(width, height);
 
     this.input.keyboard.on('keydown-F', this.toggleFullscreen, this);
     this.events.once('shutdown', () => {

@@ -32,7 +32,7 @@ export default class Slime extends Phaser.Physics.Arcade.Sprite {
     scene.physics.add.existing(this);
 
     this.sceneRef = scene;
-    this.maxHealth = config.health ?? 3;
+    this.maxHealth = config.health ?? 2;
     this.health = this.maxHealth;
     this.speed = config.speed ?? 70;
     this.detectionRange = config.detectionRange ?? 220;

@@ -6,6 +6,7 @@ export default class BootScene extends Phaser.Scene {
   }
   preload() {
     const tilesetPath = new URL('../assets/TileSet v1.0.png', import.meta.url).href;
+    const portadaPath = new URL('../Portada.png', import.meta.url).href;
 
     const michaelFolder = '../assets/Michael';
     const michaelRunGroups = [
@@ -34,6 +35,7 @@ export default class BootScene extends Phaser.Scene {
 
     const slimeFolder = '../assets/slime';
     this.load.image('tileset', tilesetPath);
+    this.load.image('portada', portadaPath);
 
     this.load.spritesheet('slime-idle', new URL(`${slimeFolder}/Slime1_Idle_full.png`, import.meta.url).href, {
       frameWidth: 64,
