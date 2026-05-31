@@ -17,18 +17,12 @@ export default class GameScene extends Phaser.Scene {
     this.createGameplayTextures();
     this.createSlimeAnimations();
     this.createSmallMap(room01);
-    // crear animaciones del jugador usando los PNG individuales del run
-    // grupos: 1-6 abajo, 13-18 lateral, 25-30 arriba
     this.createPlayerAnimations();
 
     this.player = this.physics.add.sprite(room01.spawn.x, room01.spawn.y, 'michael-run-1');
-    // anclar en la parte inferior-centro para evitar que el sprite aparezca cortado
     this.player.setOrigin(0.5, 1);
-    // escalar por un entero respecto a los cuadros 16x32 para evitar recortes por sub-píxeles
     this.player.setScale(2);
     this.player.body.setCollideWorldBounds(true);
-    // calcular la hitbox en base al tamaño visible del sprite (16x32 * escala 2 = 32x64)
-    // la hitbox cubre sobre todo el cuerpo y deja fuera un poco de cabeza para caminar mejor
     const playerFrameWidth = 16;
     const playerFrameHeight = 32;
     const playerScale = 2;
@@ -41,7 +35,6 @@ export default class GameScene extends Phaser.Scene {
     this.player.body.setSize(playerHitboxWidth, playerHitboxHeight);
     this.player.body.setOffset(playerHitboxOffsetX, playerHitboxOffsetY);
 
-    // colisiones con tiles eliminadas por solicitud; mantener límites del mundo y registrar posiciones válidas
     this.player.body.setCollideWorldBounds(true);
     this.lastValidPos = { x: this.player.x, y: this.player.y };
 
@@ -68,10 +61,13 @@ export default class GameScene extends Phaser.Scene {
       color: '#ffffff'
     }).setDepth(1000).setScrollFactor(0);
 
-    this.instructionText = this.add.text(12, 32, 'F: pantalla completa | G: debug tiles | SPACE: golpear', {
-      fontSize: '12px',
-      color: '#d8f7ff'
-    }).setDepth(1000).setScrollFactor(0);
+    // ── Texto de instrucciones (M añadido) ───────────────────────────────────
+    this.instructionText = this.add.text(
+      12, 32,
+      'F: pantalla completa | G: debug tiles | SPACE: golpear | M: silenciar',
+      { fontSize: '12px', color: '#d8f7ff' }
+    ).setDepth(1000).setScrollFactor(0);
+    // ─────────────────────────────────────────────────────────────────────────
 
     this.messageText = this.add.text(this.scale.width / 2, 64, '', {
       fontSize: '18px',
@@ -80,7 +76,6 @@ export default class GameScene extends Phaser.Scene {
       padding: { x: 10, y: 4 }
     }).setOrigin(0.5).setDepth(1000).setScrollFactor(0);
 
-    // texto de depuración de colisiones en pantalla
     this.collisionDebugText = this.add.text(12, 52, '', {
       fontSize: '12px',
       color: '#ffdddd',
@@ -89,13 +84,25 @@ export default class GameScene extends Phaser.Scene {
 
     this.updateHud();
 
+    // ── MÚSICA DE COMBATE ────────────────────────────────────────────────────
+    // stopAll() evita solapamiento con bgm-menu si el jugador arranca la partida
+    // inmediatamente. En reinicios (scene.restart) no hay música activa previa,
+    // pero la llamada es segura de todas formas.
+    this.sound.stopAll();
+    this.bgm = this.sound.add('bgm-game', { loop: true, volume: 0.45 });
+    this.bgm.play();
+    // ─────────────────────────────────────────────────────────────────────────
+
     this.input.keyboard.on('keydown-SPACE', this.startPunch, this);
     this.input.keyboard.on('keydown-F', this.toggleFullscreen, this);
     this.input.keyboard.on('keydown-G', this.toggleTileDebugOverlay, this);
+    this.input.keyboard.on('keydown-M', this.toggleMute, this);   // ← NUEVO
+
     this.events.once('shutdown', () => {
       this.input.keyboard.off('keydown-SPACE', this.startPunch, this);
       this.input.keyboard.off('keydown-F', this.toggleFullscreen, this);
       this.input.keyboard.off('keydown-G', this.toggleTileDebugOverlay, this);
+      this.input.keyboard.off('keydown-M', this.toggleMute, this); // ← NUEVO
     });
   }
   update(time) {
@@ -138,7 +145,6 @@ export default class GameScene extends Phaser.Scene {
     this.updateSlimes(time);
     this.updateRoomState();
 
-    // Keep the player inside the 24x24 room using a simple pixel clamp.
     if (this.map) {
       const bodyBB = this.player.body;
       const halfBodyW = bodyBB.width / 2;
@@ -159,7 +165,6 @@ export default class GameScene extends Phaser.Scene {
       this.lastValidPos.y = this.player.y;
     }
 
-    // live debug: show map size and player's tile coords
     if (this.collisionDebugText && this.map) {
       const centerX = this.player.x;
       const centerY = this.player.y;
@@ -174,6 +179,15 @@ export default class GameScene extends Phaser.Scene {
       this.collisionDebugText.setText(info);
     }
   }
+
+  // ── MÚSICA: silenciar / activar ──────────────────────────────────────────
+  // `this.sound.mute` es una propiedad global del SoundManager de Phaser.
+  // Al ponerla a true se silencian TODOS los sonidos (música + sfx futuros)
+  // sin detenerlos, de modo que al reactivarla retoman exactamente donde estaban.
+  toggleMute() {
+    this.sound.mute = !this.sound.mute;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   createGameplayTextures() {
     if (!this.textures.exists('room-key')) {
@@ -271,7 +285,6 @@ export default class GameScene extends Phaser.Scene {
     const punchAnimationKey = this.getPunchAnimationKey(this.lastFacing.direction);
     this.isPunching = true;
     this.punchCooldownUntil = this.time.now + 260;
-    // durante el golpe hay una ventana corta de invulnerabilidad para que no te dañen al acercarte
     this.playerInvulnerableUntil = Math.max(this.playerInvulnerableUntil, this.time.now + 180);
     this.player.anims.play(punchAnimationKey, true);
 
@@ -512,7 +525,6 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createSmallMap(room) {
-    // keep current room available for debug overlay
     this.currentRoom = room;
     if (room.showTilesetReference) {
       this.createTilesetReferenceMap(room);
@@ -565,7 +577,6 @@ export default class GameScene extends Phaser.Scene {
 
     room.decor.forEach(({ x, y, tile }) => decoLayer.putTileAt(tile, x, y));
 
-    // Only these tile indices should act as blocking collisions
     const blockingIndices = [0, 1, 2, 10, 12, 20, 21, 22];
     wallLayer.setCollision(blockingIndices);
 
@@ -668,7 +679,6 @@ export default class GameScene extends Phaser.Scene {
         const topTile = decoTile || wallTile || floorTile;
         const logicalIndex = topTile && topTile.index !== -1 ? topTile.index : -1;
 
-        // background rectangle to show blocking (red) / walkable (green) / empty (transparent)
         const gfx = this.add.rectangle(
           x * this.map.tileWidth + this.map.tileWidth / 2,
           y * this.map.tileHeight + this.map.tileHeight / 2,
@@ -726,21 +736,13 @@ export default class GameScene extends Phaser.Scene {
 
   onPlayerTileCollision(player, tile) {
     try {
-      // tile may be a Tile object when colliding with a TilemapLayer
       const idx = tile && tile.index !== undefined ? tile.index : -1;
       const tx = tile && tile.x !== undefined ? tile.x : null;
       const ty = tile && tile.y !== undefined ? tile.y : null;
-      // get what each layer has at that coord
       const floorT = tx !== null ? this.floorLayer.getTileAt(tx, ty) : null;
       const wallT = tx !== null ? this.wallLayer.getTileAt(tx, ty) : null;
       const decoT = tx !== null ? this.decoLayer.getTileAt(tx, ty) : null;
 
-      console.log('--- Player collision debug ---');
-      console.log('collided tile.index:', idx, 'tile coords:', tx, ty);
-      console.log('floorLayer tile.index:', floorT && floorT.index, 'wallLayer tile.index:', wallT && wallT.index, 'decoLayer tile.index:', decoT && decoT.index);
-      console.log('room.walkableTiles:', this.currentRoom && this.currentRoom.walkableTiles);
-
-      // highlight the tile briefly
       const worldX = tile.pixelX + this.map.tileWidth / 2;
       const worldY = tile.pixelY + this.map.tileHeight / 2;
       const rect = this.add.rectangle(worldX, worldY, this.map.tileWidth, this.map.tileHeight, 0xff0000, 0.4).setDepth(2000);
@@ -753,8 +755,7 @@ export default class GameScene extends Phaser.Scene {
         ]);
       }
     } catch (e) {
-      // ignore if tile is undefined
-      // console.error(e);
+      // ignore
     }
   }
 }

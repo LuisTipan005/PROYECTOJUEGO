@@ -57,6 +57,30 @@ export default class BootScene extends Phaser.Scene {
       frameWidth: 64,
       frameHeight: 64
     });
+
+    // ── MÚSICA ──────────────────────────────────────────────────────────────
+    // Se cargan ambos formatos (OGG + MP3) para máxima compatibilidad entre
+    // navegadores. Phaser elige automáticamente el primer formato soportado.
+    // Coloca los archivos en: src/assets/audio/
+    //
+    //  bgm-menu     → música de portada  (loop)
+    //  bgm-game     → música de combate  (loop)
+    //  bgm-gameover → jingle de game over (sin loop)
+    // ─────────────────────────────────────────────────────────────────────────
+    const audioFolder = '../assets/audio';
+
+    this.load.audio('bgm-menu', [
+      new URL(`${audioFolder}/menu.ogg`, import.meta.url).href,
+      new URL(`${audioFolder}/menu.mp3`, import.meta.url).href
+    ]);
+    this.load.audio('bgm-game', [
+      new URL(`${audioFolder}/game.ogg`, import.meta.url).href,
+      new URL(`${audioFolder}/game.mp3`, import.meta.url).href
+    ]);
+    this.load.audio('bgm-gameover', [
+      new URL(`${audioFolder}/gameover.ogg`, import.meta.url).href,
+      new URL(`${audioFolder}/gameover.mp3`, import.meta.url).href
+    ]);
   }
   create() {
     for (let index = 1; index <= 30; index += 1) {
